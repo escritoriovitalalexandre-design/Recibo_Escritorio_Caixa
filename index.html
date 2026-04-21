@@ -2909,6 +2909,13 @@ function lancarContasFixas(){
 // INIT
 // ═══════════════════════════════════════════════════════════
 // ── INIT: aguarda DOM + SDK carregarem
+// Logout automático ao fechar a aba/janela
+window.addEventListener('beforeunload', async function(){
+  if(sbClient && usuarioAtual){
+    await sbClient.auth.signOut();
+  }
+});
+
 window._tentarInit = function(){
   if(!document.body) return; // DOM ainda não pronto
   if(window._initRodou) return;
