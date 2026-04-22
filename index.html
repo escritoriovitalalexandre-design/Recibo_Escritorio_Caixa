@@ -224,9 +224,56 @@ input[type="month"]::-webkit-calendar-picker-indicator{filter:invert(.6);cursor:
   nav button{padding:5px 7px;font-size:.72rem}
   .item-row{grid-template-columns:1fr 48px 90px 26px}
 }
+
+/* ── LOGIN / ACESSO ── */
+#login-overlay{
+  position:fixed; inset:0; z-index:5000; display:none;
+  align-items:center; justify-content:center; padding:20px;
+  background:rgba(13,17,23,.96);
+}
+#login-overlay.open{display:flex}
+.login-card{
+  width:100%; max-width:420px; background:var(--bg2); border:1px solid var(--border2);
+  border-radius:18px; box-shadow:var(--shadow); padding:26px;
+}
+.login-card h2{
+  font-family:'Playfair Display',serif; color:var(--white); font-size:1.2rem; margin-bottom:6px;
+}
+.login-card p{
+  color:var(--text2); font-size:.82rem; margin-bottom:16px;
+}
+.login-actions{display:flex; justify-content:flex-end; margin-top:14px}
+.login-error{
+  display:none; margin-top:10px; padding:9px 12px; border-radius:10px;
+  background:var(--red-bg); border:1px solid var(--red); color:var(--red2); font-size:.8rem;
+}
+.login-error.show{display:block}
+#btn-sair-topo{display:none;margin-left:8px}
+body.locked{overflow:hidden}
+
 </style>
 </head>
 <body>
+
+<div id="login-overlay" class="open">
+  <div class="login-card">
+    <h2>Acesso ao sistema</h2>
+    <p>Informe usuário e senha para entrar.</p>
+    <div class="field">
+      <label>Usuário</label>
+      <input type="text" id="login-usuario" placeholder="Digite o usuário" autocomplete="off">
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label>Senha</label>
+      <input type="password" id="login-senha" placeholder="Digite a senha" autocomplete="off">
+    </div>
+    <div id="login-erro" class="login-error">Usuário ou senha inválidos.</div>
+    <div class="login-actions">
+      <button id="btn-login-entrar" class="btn btn-green" type="button">Entrar</button>
+    </div>
+  </div>
+</div>
+
 
 <header>
   <div class="logo">
@@ -242,8 +289,10 @@ input[type="month"]::-webkit-calendar-picker-indicator{filter:invert(.6);cursor:
     <button onclick="go('relatorios')">📈 Relatórios</button>
     <button onclick="go('clientes')">👥 Clientes</button>
     <button onclick="go('itens')">🗂️ Itens</button>
+    <button onclick="go('acesso')">🔐 Acesso</button>
     <button onclick="go('config')">⚙️ Config.</button>
   </nav>
+  <button id="btn-sair-topo" class="btn btn-danger btn-sm" type="button">Sair</button>
 </header>
 
 <main>
@@ -610,6 +659,34 @@ input[type="month"]::-webkit-calendar-picker-indicator{filter:invert(.6);cursor:
   </div>
   <div class="btn-row"><button class="btn btn-green" onclick="salvarItemCat()">+ Salvar item</button></div>
   <div id="itens-cat-lista" style="margin-top:16px"></div>
+</div>
+</div>
+
+
+<!-- ══════════════ ACESSO ══════════════ -->
+<div id="sec-acesso" class="section">
+<div class="card" id="card-auth-config">
+  <div class="card-title">🔐 Alterar usuário e senha</div>
+  <div class="fg fg1">
+    <div class="field">
+      <label>Novo usuário</label>
+      <input type="text" id="cfg-auth-user" placeholder="Digite o novo usuário">
+    </div>
+    <div class="field">
+      <label>Nova senha</label>
+      <input type="password" id="cfg-auth-pass" placeholder="Digite a nova senha">
+    </div>
+    <div class="field">
+      <label>Confirmar nova senha</label>
+      <input type="password" id="cfg-auth-pass2" placeholder="Repita a nova senha">
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-green" type="button" id="btn-salvar-login">Salvar usuário e senha</button>
+  </div>
+  <div style="margin-top:10px;font-size:.78rem;color:var(--text3)">
+    Sempre que quiser, altere aqui. No próximo login, o sistema usará os novos dados.
+  </div>
 </div>
 </div>
 
@@ -1037,10 +1114,134 @@ function stRecibo(r){
   return v<hoje()?{txt:'Atrasado',cls:'st-atras',bdg:'bdg-red',pago:totalPago,falta:saldo||r.total||0}:{txt:'Pendente',cls:'st-pend',bdg:'bdg-gold',pago:totalPago,falta:saldo||r.total||0};
 }
 
+
+function getAuthConfig(){
+  try{
+    const raw=localStorage.getItem('recibos_auth_cfg_v1');
+    if(raw){
+      const cfg=JSON.parse(raw);
+      return {
+        user:(cfg.user||AUTH_USER_DEFAULT).trim()||AUTH_USER_DEFAULT,
+        pass:(cfg.pass||AUTH_PASS_DEFAULT).trim()||AUTH_PASS_DEFAULT
+      };
+    }
+  }catch(e){}
+  return {user:AUTH_USER_DEFAULT,pass:AUTH_PASS_DEFAULT};
+}
+function saveAuthConfig(user,pass){
+  localStorage.setItem('recibos_auth_cfg_v1', JSON.stringify({user:user.trim(),pass:pass.trim()}));
+}
+function fillAuthConfigFields(){
+  const cfg=getAuthConfig();
+  if(R('cfg-auth-user')) R('cfg-auth-user').value=cfg.user;
+  if(R('cfg-auth-pass')) R('cfg-auth-pass').value='';
+  if(R('cfg-auth-pass2')) R('cfg-auth-pass2').value='';
+}
+function salvarCredenciaisSistema(){
+  const u=(R('cfg-auth-user')?.value||'').trim();
+  const p=(R('cfg-auth-pass')?.value||'').trim();
+  const p2=(R('cfg-auth-pass2')?.value||'').trim();
+  if(!u){ toast('Informe o usuário.','var(--red)'); R('cfg-auth-user')?.focus(); return false; }
+  if(!p){ toast('Informe a nova senha.','var(--red)'); R('cfg-auth-pass')?.focus(); return false; }
+  if(p.length < 3){ toast('A senha deve ter pelo menos 3 caracteres.','var(--red)'); R('cfg-auth-pass')?.focus(); return false; }
+  if(p !== p2){ toast('A confirmação da senha não confere.','var(--red)'); R('cfg-auth-pass2')?.focus(); return false; }
+  try{
+    saveAuthConfig(u,p);
+    fillAuthConfigFields();
+    toast('Usuário e senha atualizados.','var(--green)');
+    return true;
+  }catch(e){
+    toast('Não foi possível salvar usuário e senha.','var(--red)');
+    return false;
+  }
+}
+function bindAuthConfigUI(){
+  fillAuthConfigFields();
+  const btn = R('btn-salvar-login');
+  if(btn && !btn.dataset.boundAuthCfg){
+    btn.dataset.boundAuthCfg = '1';
+    btn.addEventListener('click', salvarCredenciaisSistema);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LOGIN / LOGOUT
+// ═══════════════════════════════════════════════════════════
+const AUTH_SESSION_KEY='recibos_auth_ok_v1';
+const AUTH_USER_DEFAULT='admin';
+const AUTH_PASS_DEFAULT='vital123';
+
+function authEls(){
+  return {
+    overlay:R('login-overlay'),
+    user:R('login-usuario'),
+    pwd:R('login-senha'),
+    btn:R('btn-login-entrar'),
+    err:R('login-erro'),
+    sair:R('btn-sair-topo')
+  };
+}
+function authShowError(msg){
+  const a=authEls();
+  if(!a.err)return;
+  a.err.textContent=msg||'Usuário ou senha inválidos.';
+  a.err.classList.add('show');
+}
+function authHideError(){
+  const a=authEls();
+  if(a.err)a.err.classList.remove('show');
+}
+function travarSistema(travar){
+  const a=authEls();
+  document.body.classList.toggle('locked',travar);
+  if(a.overlay)a.overlay.classList.toggle('open',travar);
+  if(a.sair)a.sair.style.display=travar?'none':'inline-flex';
+}
+function entrarSistema(){
+  const a=authEls();
+  const user=(a.user?.value||'').trim();
+  const pwd=(a.pwd?.value||'').trim();
+  const cfg=getAuthConfig();
+  if(user===cfg.user && pwd===cfg.pass){
+    sessionStorage.setItem(AUTH_SESSION_KEY,'ok');
+    authHideError();
+    if(a.pwd)a.pwd.value='';
+    travarSistema(false);
+    toast('Acesso liberado.','var(--green)');
+  }else{
+    authShowError('Usuário ou senha inválidos.');
+    if(a.pwd)a.pwd.value='';
+    a.pwd?.focus();
+  }
+}
+function sairSistema(){
+  sessionStorage.removeItem(AUTH_SESSION_KEY);
+  const a=authEls();
+  if(a.user)a.user.value='';
+  if(a.pwd)a.pwd.value='';
+  authHideError();
+  travarSistema(true);
+  a.user?.focus();
+}
+function initAuth(){
+  const a=authEls();
+  if(!a.overlay)return;
+  const ok=sessionStorage.getItem(AUTH_SESSION_KEY)==='ok';
+  travarSistema(!ok);
+  if(!ok)a.user?.focus();
+  a.btn?.addEventListener('click',entrarSistema);
+  a.user?.addEventListener('keydown',e=>{if(e.key==='Enter')entrarSistema();});
+  a.pwd?.addEventListener('keydown',e=>{if(e.key==='Enter')entrarSistema();});
+  a.user?.addEventListener('input',authHideError);
+  a.pwd?.addEventListener('input',authHideError);
+  a.sair?.addEventListener('click',sairSistema);
+}
+
+
 // ═══════════════════════════════════════════════════════════
 // NAV
 // ═══════════════════════════════════════════════════════════
-const TABS=['dashboard','novo','historico','replicar','caixa','relatorios','clientes','itens','config'];
+const TABS=['dashboard','novo','historico','replicar','caixa','relatorios','clientes','itens','acesso','config'];
 function go(id){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
@@ -1053,6 +1254,7 @@ function go(id){
   if(id==='relatorios'){popularRefs();renderRelatorios();}
   if(id==='clientes'){renderClis();renderChipsCli();}
   if(id==='itens')renderItensCat();
+  if(id==='acesso')bindAuthConfigUI();
   if(id==='config')loadCfg();
   if(id==='novo'){updSelCli();gerarNum();renderChipsNovo();}
 }
@@ -2592,6 +2794,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   R('r-data').value=isoHoje();
   R('cx-data-lanc').value=isoHoje();
   addItem();updSelCli();gerarNum();renderChipsNovo();renderChipsCli();loadCfg();atualizarMetaBackup();renderDashboard();
+  initAuth();
+  bindAuthConfigUI();
 });
 </script>
 
