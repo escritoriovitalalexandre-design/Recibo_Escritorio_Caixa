@@ -945,13 +945,12 @@ function mskCEP(el){
   el.value=v;
 }
 function mskValor(el){
-  // Pega só os dígitos do que foi digitado
+  // Preserva sinal negativo
+  const neg=el.value.trim().startsWith('-');
   const digits=el.value.replace(/\D/g,'');
-  if(!digits){el.value='';return;}
-  // Interpreta como centavos: 700 → 7,00 / 7000 → 70,00 / 70000 → 700,00
+  if(!digits){el.value=neg?'-':'';return;}
   const num=parseInt(digits,10)/100;
-  // Formata com separador brasileiro
-  el.value=num.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  el.value=(neg?'-':'')+num.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 // pBRL definido abaixo junto com as demais funções utilitárias
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1208,7 +1207,9 @@ function pBRL(s){
   if(typeof s==='number')return isFinite(s)?s:0;
   let v=String(s).trim();
   if(!v)return 0;
-  v=v.replace(/\s/g,'');
+  // Detecta sinal negativo
+  const neg=v.startsWith('-');
+  v=v.replace(/^-/,'').replace(/\s/g,'');
   const hasComma=v.includes(',');
   const hasDot=v.includes('.');
   if(hasComma){
@@ -1216,20 +1217,22 @@ function pBRL(s){
     const inteiro=(partes.shift()||'').replace(/\./g,'').replace(/\D/g,'')||'0';
     let dec=(partes.join('')||'').replace(/\D/g,'');
     dec=(dec+'00').slice(0,2);
-    return parseFloat(`${inteiro}.${dec}`)||0;
+    return (neg?-1:1)*(parseFloat(`${inteiro}.${dec}`)||0);
   }
   if(hasDot){
     const clean=v.replace(/,/g,'');
-    if(/\d+\.\d{1,2}$/.test(clean)) return parseFloat(clean)||0;
+    if(/\d+\.\d{1,2}$/.test(clean)) return (neg?-1:1)*(parseFloat(clean)||0);
     const norm=v.replace(/\./g,'').replace(/\D/g,'');
-    return norm?parseFloat(norm)||0:0;
+    return norm?(neg?-1:1)*(parseFloat(norm)||0):0;
   }
   const only=v.replace(/\D/g,'');
-  return only?parseFloat(only)||0:0;
+  return only?(neg?-1:1)*(parseFloat(only)||0):0;
 }
 const fmtInputValor=v=>{
   const n=pBRL(v);
-  return n? n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+  if(!n)return '';
+  const abs=Math.abs(n);
+  return (n<0?'-':'')+abs.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 };
 const fmtD=iso=>iso?new Date(iso+'T12:00:00').toLocaleDateString('pt-BR'):'';
 const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -2334,12 +2337,14 @@ function htmlVia(r,via){
   const itensExib=(r.itens||[]).slice(0,4);
   const linhas=itensExib.map((it,idx)=>{
     const v=pBRL(it.val),q=parseFloat(it.qtd)||1;
+    const sub=v*q;const isNeg=sub<0;
     const bg=idx%2===0?'#f8fafc':'#ffffff';
+    const corVal=isNeg?'#dc2626':'#166534';
     return`<tr style="background:${bg}">
       <td style="padding:5px 9px;border:1px solid #e2e8f0;font-size:.8rem">${esc(it.desc)||'—'}</td>
       <td style="padding:5px 9px;border:1px solid #e2e8f0;text-align:center;font-size:.8rem;width:42px">${q}</td>
-      <td style="padding:5px 9px;border:1px solid #e2e8f0;text-align:right;font-size:.8rem;width:85px">${fmtR(v)}</td>
-      <td style="padding:5px 9px;border:1px solid #e2e8f0;text-align:right;font-size:.8rem;font-weight:600;width:88px;color:#166534">${fmtR(v*q)}</td>
+      <td style="padding:5px 9px;border:1px solid #e2e8f0;text-align:right;font-size:.8rem;width:85px;color:${v<0?'#dc2626':'inherit'}">${fmtR(v)}</td>
+      <td style="padding:5px 9px;border:1px solid #e2e8f0;text-align:right;font-size:.8rem;font-weight:600;width:88px;color:${corVal}">${fmtR(sub)}</td>
     </tr>`;
   }).join('');
   const pixB=cfg.pix?`<div style="border:1px solid #16a34a;border-radius:6px;padding:7px 11px;display:flex;align-items:center;gap:9px;margin-bottom:9px;font-size:.79rem;background:#f0fdf4">
@@ -2360,7 +2365,7 @@ function htmlVia(r,via){
         <strong style="color:${saldo>0?'#dc2626':'#166534'}">${fmtR(Math.max(0,saldo))}</strong>
       </div></div>`;
   }
-  const pgto=cidade?`<div style="text-align:right;flex:1;min-width:220px"><div style="font-size:.76rem;color:#555;display:flex;justify-content:flex-end;align-items:baseline;gap:3px;flex-wrap:wrap">${esc(cidade)}, <span style="display:inline-block;border-bottom:1px solid #555;width:28px;margin:0 2px;vertical-align:baseline"></span> de <span style="display:inline-block;border-bottom:1px solid #555;width:82px;margin:0 2px;vertical-align:baseline"></span> de 20<span style="display:inline-block;border-bottom:1px solid #555;width:20px;margin:0 2px;vertical-align:baseline"></span></div></div>`:'';
+  const pgto=`<div style="text-align:right;flex:1;min-width:220px"><div style="font-size:.76rem;color:#555;display:flex;justify-content:flex-end;align-items:baseline;gap:3px;flex-wrap:wrap">${cidade?esc(cidade):'<span style="display:inline-block;border-bottom:1px solid #555;width:90px;margin:0 2px;vertical-align:baseline"></span>'}, <span style="display:inline-block;border-bottom:1px solid #555;width:28px;margin:0 2px;vertical-align:baseline"></span> de <span style="display:inline-block;border-bottom:1px solid #555;width:82px;margin:0 2px;vertical-align:baseline"></span> de 20<span style="display:inline-block;border-bottom:1px solid #555;width:20px;margin:0 2px;vertical-align:baseline"></span></div></div>`;
   return`<div style="padding:10px 14px;font-family:'Outfit',sans-serif;background:#fff;color:#1a1a2e;font-size:.78rem">
     <!-- CABEÇALHO -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #1e3a5f;padding-bottom:7px;margin-bottom:8px">
