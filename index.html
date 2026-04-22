@@ -731,6 +731,31 @@ input[type="month"]::-webkit-calendar-picker-indicator{filter:invert(.6);cursor:
     </div>
   </div>
   <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+    <div style="font-size:.7rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📲 Modelo da mensagem WhatsApp</div>
+    <p style="font-size:.78rem;color:var(--text3);margin-bottom:8px">Personalize o texto enviado ao cliente. Use as variáveis abaixo (clique para inserir):</p>
+    <div class="chips-wrap" id="wpp-chips" style="margin-bottom:8px">
+      <span class="chip" onclick="insertWppVar('{saudacao}')" title="Olá, tudo bem?">{saudacao}</span>
+      <span class="chip" onclick="insertWppVar('{nome}')" title="Nome do cliente">{nome}</span>
+      <span class="chip" onclick="insertWppVar('{ref}')" title="Abril/2026">{ref}</span>
+      <span class="chip" onclick="insertWppVar('{ref_lower}')" title="abril/2026 (minúsculo)">{ref_lower}</span>
+      <span class="chip" onclick="insertWppVar('{itens}')" title="Lista dos serviços">{itens}</span>
+      <span class="chip" onclick="insertWppVar('{total}')" title="R$ 550,00">{total}</span>
+      <span class="chip" onclick="insertWppVar('{vencimento}')" title="23/04/2026">{vencimento}</span>
+      <span class="chip" onclick="insertWppVar('{numero}')" title="0004">{numero}</span>
+      <span class="chip" onclick="insertWppVar('{escritorio}')" title="Nome do escritório">{escritorio}</span>
+      <span class="chip" onclick="insertWppVar('{pix}')" title="Dados Pix">{pix}</span>
+      <span class="chip" onclick="insertWppVar('{obs}')" title="Observação do recibo">{obs}</span>
+    </div>
+    <div class="field" style="margin-bottom:8px"><label>Modelo da mensagem</label>
+      <textarea id="cfg-wpp-modelo" rows="8" style="font-size:.82rem;line-height:1.5" placeholder="Olá, tudo bem?&#10;Segue o valor dos honorários referentes a {ref_lower}:&#10;{itens}&#10;Total devido: {total}&#10;Vencimento: {vencimento}&#10;Recibo nº {numero}&#10;{escritorio}"></textarea>
+    </div>
+    <div class="btn-row" style="gap:10px;align-items:center">
+      <button class="btn btn-ghost btn-sm" onclick="previewWpp()">👁️ Pré-visualizar</button>
+      <button class="btn btn-ghost btn-sm" onclick="resetModeloWpp()">↩️ Restaurar padrão</button>
+    </div>
+    <div id="wpp-preview" style="display:none;margin-top:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:.82rem;white-space:pre-wrap;color:var(--text);line-height:1.5"></div>
+  </div>
+  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
     <div class="fg"><div class="field"><label>Próximo nº de recibo</label><input type="number" id="cfg-prox" value="1" min="1"></div></div>
   </div>
   <div class="btn-row"><button class="btn btn-green" onclick="salvarCfg()">💾 Salvar configurações</button></div>
@@ -2316,6 +2341,7 @@ function salvarCfg(){
     endereco:R('cfg-end').value,tel:R('cfg-tel').value,email:R('cfg-email').value,
     contador:R('cfg-cont').value,pix:R('cfg-pix').value,pixTipo:R('cfg-pix-t').value,
     banco:R('cfg-banco').value,pixFav:R('cfg-pix-f').value,cidade:R('cfg-cidade').value,
+    wppModelo:R('cfg-wpp-modelo').value,
     proximo:parseInt(R('cfg-prox').value)||1};
   save('configuração');toast('Configurações salvas!','var(--green)');
 }
@@ -2325,6 +2351,7 @@ function loadCfg(){
     'cfg-email':'email','cfg-cont':'contador','cfg-pix':'pix','cfg-banco':'banco','cfg-pix-f':'pixFav','cfg-cidade':'cidade'};
   Object.entries(m).forEach(([id,k])=>{const e=R(id);if(e)e.value=c[k]||'';});
   R('cfg-pix-t').value=c.pixTipo||'CNPJ';R('cfg-prox').value=c.proximo||1;
+  const wppEl=R('cfg-wpp-modelo');if(wppEl)wppEl.value=c.wppModelo||'';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2513,13 +2540,86 @@ function confirmarBaixaParcial(){
 // ═══════════════════════════════════════════════════════════
 // WHATSAPP
 // ═══════════════════════════════════════════════════════════
+const WPP_MODELO_PADRAO=`Olá, tudo bem?
+Segue o valor dos honorários referentes a {ref_lower}:
+{itens}
+Total devido: {total}
+Vencimento: {vencimento}
+Recibo nº {numero}
+{escritorio}`;
+
+function getWppModelo(){return db.config.wppModelo||WPP_MODELO_PADRAO;}
+
+function montarItensWpp(r,semBold){
+  return (r.itens||[]).map(it=>{
+    const v=pBRL(it.val),q=parseFloat(it.qtd)||1,sub=v*q;
+    // Formata desc em Title Case
+    const desc=(it.desc||'').split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+    return `${desc}: ${fmtR(sub)}`;
+  }).join('\n');
+}
+
+function montarMsgWpp(r,modelo){
+  const cfg=r.cfg||db.config||{};
+  const refLower=(r.ref||'').toLowerCase();
+  const itensTexto=montarItensWpp(r);
+  const pixTexto=cfg.pix?`Pix (${cfg.pixTipo||'Chave'}): ${cfg.pix}${cfg.pixFav?' - Fav: '+cfg.pixFav:''}`:'';
+  const vencTexto=r.vencimento?fmtD(r.vencimento):'';
+  const nomeEsc=cfg.nome||'Escritório';
+
+  let msg=modelo
+    .replace(/\{saudacao\}/g,'Olá, tudo bem?')
+    .replace(/\{nome\}/g,r.nome||'')
+    .replace(/\{ref_lower\}/g,refLower)
+    .replace(/\{ref\}/g,r.ref||'')
+    .replace(/\{itens\}/g,itensTexto)
+    .replace(/\{total\}/g,fmtR(r.total))
+    .replace(/\{vencimento\}/g,vencTexto)
+    .replace(/\{numero\}/g,r.numero||'')
+    .replace(/\{escritorio\}/g,nomeEsc)
+    .replace(/\{pix\}/g,pixTexto)
+    .replace(/\{obs\}/g,r.obs||'');
+
+  // Remove linhas vazias duplicadas
+  msg=msg.replace(/\n{3,}/g,'\n\n').trim();
+  return msg;
+}
+
 function enviarWpp(){
-  if(!rcbAtual)return;const r=rcbAtual,cfg=r.cfg||{};
-  const linhas=r.itens.map(i=>`• ${i.desc}: ${fmtR(pBRL(i.val)*(parseFloat(i.qtd)||1))}`).join('\n');
-  const pix=cfg.pix?`\n\n💠 *Pix (${cfg.pixTipo}):* ${cfg.pix}`:'';
-  const venc=r.vencimento?`\n📅 *Vencimento:* ${fmtD(r.vencimento)}`:'';
-  const msg=`📋 *RECIBO Nº ${r.numero}*\n${cfg.nome||'Escritório'}\nData: ${r.data}${r.ref?' | Ref: '+r.ref:''}\n\n*Cliente:* ${r.nome}${r.doc?' ('+r.doc+')':''}\n\n*Serviços:*\n${linhas}\n\n*Total: ${fmtR(r.total)}*${venc}${pix}${r.obs?'\n\n📌 '+r.obs:''}`;
+  if(!rcbAtual)return;
+  const modelo=getWppModelo();
+  const msg=montarMsgWpp(rcbAtual,modelo);
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
+function insertWppVar(varName){
+  const el=R('cfg-wpp-modelo');if(!el)return;
+  const start=el.selectionStart,end=el.selectionEnd;
+  const txt=el.value;
+  el.value=txt.substring(0,start)+varName+txt.substring(end);
+  el.focus();
+  el.selectionStart=el.selectionEnd=start+varName.length;
+}
+
+function previewWpp(){
+  const modelo=R('cfg-wpp-modelo').value||WPP_MODELO_PADRAO;
+  // Monta um recibo fictício para preview
+  const fakeR={
+    nome:'JOÃO DA SILVA',numero:'0001',ref:'Abril/2026',
+    data:'22/04/2026',vencimento:'2026-04-30',total:550,
+    itens:[{desc:'MENSALIDADE',qtd:1,val:'500,00'},{desc:'DEPARTAMENTO PESSOAL',qtd:1,val:'50,00'}],
+    obs:'',cfg:db.config||{}
+  };
+  const msg=montarMsgWpp(fakeR,modelo);
+  const el=R('wpp-preview');
+  el.style.display='block';
+  el.textContent=msg;
+}
+
+function resetModeloWpp(){
+  R('cfg-wpp-modelo').value=WPP_MODELO_PADRAO;
+  toast('Modelo padrão restaurado');
+  const el=R('wpp-preview');if(el)el.style.display='none';
 }
 
 // ═══════════════════════════════════════════════════════════
