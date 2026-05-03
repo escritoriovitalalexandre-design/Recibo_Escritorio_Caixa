@@ -2411,7 +2411,7 @@ function htmlVia(r,via){
     <!-- CLIENTE -->
     <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:8px 12px;margin-bottom:10px;line-height:1.6">
       <div style="font-size:.63rem;text-transform:uppercase;letter-spacing:.05em;color:#0284c7;margin-bottom:2px">Recebemos de</div>
-      <strong style="font-size:.84rem">${esc(r.nome)}</strong>${r.doc?` <span style="color:#64748b;font-size:.78rem">· ${esc(r.doc)}</span>`:''}<br>${r.endereco?`<span style="font-size:.73rem;color:#475569">Endereço: ${esc(r.endereco)}</span><br>`:''}
+      <strong style="font-size:.84rem">${(()=>{const cod=codCliente(r);return cod?esc(cod)+" - ":"";})()}${esc(r.nome)}</strong>${r.doc?` <span style="color:#64748b;font-size:.78rem">· ${esc(r.doc)}</span>`:''}<br>${r.endereco?`<span style="font-size:.73rem;color:#475569">Endereço: ${esc(r.endereco)}</span><br>`:''}
       <span style="font-size:.74rem;color:#64748b">Pagamento: ${esc(r.pag)}${r.cobranca?` · Cobrança: ${esc(r.cobranca)}`:''}</span>
     </div>
     <!-- TABELA ITENS -->
