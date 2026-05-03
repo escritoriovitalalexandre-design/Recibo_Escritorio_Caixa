@@ -1794,7 +1794,7 @@ function confirmarBaixaRapida(){
 }
 function imprimirTodos(){
   const lista=filtrarRecibos();if(!lista.length){toast('Nenhum recibo para imprimir');return;}
-  R('area-todos').innerHTML=lista.map(r=>`<div class="rcb-via">${html2Vias(r)}</div>`).join('');
+  R('area-todos').innerHTML=lista.map(r=>html2Vias(r)).join('');
   R('m-todos').classList.add('open');
 }
 
