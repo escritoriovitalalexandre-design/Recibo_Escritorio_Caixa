@@ -1824,22 +1824,19 @@ function executarRep(){
   if(!dest){toast('Informe a referência de destino');return;}
   const sel=[...document.querySelectorAll('.rep-chk:checked')].map(c=>parseInt(c.value));
   if(!sel.length){toast('Selecione ao menos um recibo');return;}
-  // MODO TRAVADO: captura os recibos originais antes de inserir novos registros.
-  // Isso evita que o unshift altere os índices e faça a replicação considerar apenas o primeiro/registro errado.
-  const originais=sel.map(idx=>db.recibos[idx]).filter(Boolean).map(r=>JSON.parse(JSON.stringify(r)));
-  if(!originais.length){toast('Nenhum recibo válido para replicar');return;}
+  const origens=sel.map(idx=>db.recibos[idx]).filter(Boolean);
   let prox=db.config.proximo||1;
-  const novos=originais.map(orig=>{
-    const novo={...orig,id:Date.now()+Math.random(),
+  origens.forEach(orig=>{
+    const copia=JSON.parse(JSON.stringify(orig));
+    db.recibos.unshift({...copia,id:Date.now()+Math.random(),
       numero:String(prox).padStart(4,'0'),ref:dest,vencimento:venc||orig.vencimento,
-      status:'pendente',pgtoData:'',emitidoEm:new Date().toISOString(),
-      cfg:JSON.parse(JSON.stringify(db.config))};
+      status:'pendente',pgtoData:'',baixas:[],
+      emitidoEm:new Date().toISOString(),
+      cfg:JSON.parse(JSON.stringify(db.config))});
     prox++;
-    return novo;
   });
-  db.recibos.unshift(...novos);
   db.config.proximo=prox;save();
-  toast(`${novos.length} recibo(s) replicado(s) para "${dest}"!`,'var(--green)');
+  toast(`${origens.length} recibo(s) replicado(s) para "${dest}"!`,'var(--green)');
   R('rep-orig').value='';R('rep-dest').value='';R('rep-venc').value='';R('rep-cli').value='';
   renderRep();
 }
