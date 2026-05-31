@@ -425,6 +425,7 @@ input[type="month"]::-webkit-calendar-picker-indicator{filter:invert(.6);cursor:
     <button class="btn btn-ghost btn-sm" onclick="limparFiltrosHist()">Limpar</button>
     <button class="btn btn-gold btn-sm" onclick="imprimirTodos()">🖨️ Imprimir filtrados</button>
     <button class="btn btn-green btn-sm" onclick="darBaixaEmLote()">✅ Dar baixa</button>
+    <button class="btn btn-danger btn-sm" onclick="excluirHistSelecionados()">🗑️ Excluir selecionados</button>
   </div>
   <div id="hist-resumo" style="font-size:.81rem;color:var(--text3);margin-bottom:10px"></div>
   <div id="hist-lista" class="scroll-pane tall"></div>
@@ -442,7 +443,7 @@ input[type="month"]::-webkit-calendar-picker-indicator{filter:invert(.6);cursor:
     <div class="field"><label>Novo vencimento</label><input type="date" id="rep-venc"></div>
   </div>
   <div id="rep-lista" style="margin-top:14px"></div>
-  <div class="btn-row"><button class="btn btn-green" onclick="executarRep()">📋 Replicar selecionados</button></div>
+  <div class="btn-row"><button class="btn btn-green" onclick="executarRep()">📋 Replicar selecionados</button><button class="btn btn-danger" onclick="excluirRepSelecionados()">🗑️ Excluir selecionados</button></div>
 </div>
 </div>
 
@@ -1727,6 +1728,28 @@ function excRcb(i){
   renderHist();renderDashboard();renderCaixa();
   toast('Recibo excluído!','var(--gold)');
 }
+
+function excluirRecibosSelecionados(cls, origem){
+  const sel=[...document.querySelectorAll('.'+cls+':checked')].map(c=>parseInt(c.value)).filter(n=>!isNaN(n));
+  const unicos=[...new Set(sel)].filter(idx=>db.recibos[idx]);
+  if(!unicos.length){toast('Selecione ao menos um recibo');return;}
+  const recibos=unicos.map(idx=>db.recibos[idx]).filter(Boolean);
+  const ids=new Set(recibos.map(r=>r.id));
+  const comBaixa=recibos.filter(r=>(r.baixas&&r.baixas.length)||(db.caixa||[]).some(lc=>lc.ref_recibo===r.id)).length;
+  let msg=`Tem certeza que deseja excluir ${recibos.length} recibo(s) selecionado(s)?\n\nEsta ação não tem volta.`;
+  if(comBaixa)msg+=`\n\nAtenção: ${comBaixa} recibo(s) possui(em) baixa total/parcial. Os lançamentos vinculados também serão removidos do caixa/banco.`;
+  msg+='\n\nDigite EXCLUIR para confirmar:';
+  if(prompt(msg)!=='EXCLUIR'){toast('Exclusão cancelada');return;}
+  db.caixa=(db.caixa||[]).filter(lc=>!ids.has(lc.ref_recibo));
+  unicos.sort((a,b)=>b-a).forEach(idx=>{if(db.recibos[idx])db.recibos.splice(idx,1);});
+  save('excluir-recibos-lote');
+  renderHist();renderDashboard();renderCaixa();
+  if(origem==='rep')renderRep();
+  toast(`${recibos.length} recibo(s) excluído(s).`,'var(--red)');
+}
+function excluirHistSelecionados(){excluirRecibosSelecionados('hist-chk','hist');}
+function excluirRepSelecionados(){excluirRecibosSelecionados('rep-chk','rep');}
+
 function ensureModalBaixaRapida(){
   if(R('m-baixa-rapida'))return;
   const wrap=document.createElement('div');
@@ -1825,11 +1848,13 @@ function executarRep(){
   const sel=[...document.querySelectorAll('.rep-chk:checked')].map(c=>parseInt(c.value));
   if(!sel.length){toast('Selecione ao menos um recibo');return;}
   const origens=sel.map(idx=>db.recibos[idx]).filter(Boolean);
+  const dataEmissaoISO=isoHoje();
   let prox=db.config.proximo||1;
   origens.forEach(orig=>{
     const copia=JSON.parse(JSON.stringify(orig));
     db.recibos.unshift({...copia,id:Date.now()+Math.random(),
       numero:String(prox).padStart(4,'0'),ref:dest,vencimento:venc||orig.vencimento,
+      data:fmtD(dataEmissaoISO),dataISO:dataEmissaoISO,
       status:'pendente',pgtoData:'',baixas:[],
       emitidoEm:new Date().toISOString(),
       cfg:JSON.parse(JSON.stringify(db.config))});
